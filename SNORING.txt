@@ -1,0 +1,143 @@
+clc
+clear all
+close all
+
+[X ,Fs ]= audioread ('1 Hour Snoring Sound.mp3');  %put file in "Document/Matlab/"
+
+[m, n] = size(X); %gives dimensions of array where n is the number of stereo channels
+if n == 2
+    wave = X(:, 1) + X(:, 2); %sum(y, 2) also accomplishes this
+    peakAmp = max(abs(wave)); 
+    wave = wave/peakAmp;
+    %  check the L/R channels for orig. peak Amplitudes
+    peakL = max(abs(X(:, 1)));
+    peakR = max(abs(X(:, 2))); 
+    maxPeak = max([peakL peakR]);
+    %apply x's original peak amplitude to the normalized mono mixdown 
+    wave = wave*maxPeak;
+    
+else
+    wave = X; %it is stereo so we will return it as is (e.g., for additional processing)
+end 
+
+
+dnsample= 1; 
+if Fs>10000
+dnsample =100;
+else ((Fs>1000) & (Fs<10000));
+    dnsample=10;
+end
+
+wave1=downsample(wave,dnsample);
+wave=wave1;
+Fs=Fs/dnsample;
+t=length(wave)/Fs;
+x=wave;
+time1=(0:length(wave)-1)/(Fs);
+y=x;
+[as,bs]=butter(3,1/(Fs/2.15),'low');
+yabs=abs(y);
+env=filter(as,bs,yabs);
+[b1,a1]=findpeaks(env,'MINPEAKDISTANCE',60);
+c=0;
+c=b1(1);
+for i=1:size(b1,1)
+    if c<b1(i)
+        c=b1(i);
+    end
+end
+envs=env/c;
+as=0;
+if length(wave)>= 100000 %30min
+    as=1400;
+else 
+    as=1000;
+end
+[bs ,as]= findpeaks ( envs , 'MINPEAKDISTANCE' ,as ) ;   %for 30min 1200 for 1min 700 works (:-/)
+
+range = 0.7;
+
+S=0;
+SNORES = [];
+for i=1:( size( bs, 1 ) )
+if bs( i )>range
+S=S+1;
+SNORES(S , 1)=bs ( i ) ;
+SNORES(S , 2)=as ( i ) ;
+end
+end
+leg_ctr=0;
+xlim=ceil(length(time1)/Fs);
+figure();
+plot(time1,wave);
+axis([0,xlim,-2,2]);
+title( 'Raw Signal' ) ;
+xlabel( 'time in seconds' );
+ylabel( ' Normalized Intensity ' ) ;
+figure();
+plot( time1 , envs );
+axis( [ 0 , xlim , -1 , 1] ) ;
+hold on ;
+
+if (S >0)
+leg_ctr=leg_ctr +1;
+leg ( leg_ctr )=plot ( SNORES ( : , 2 ) /Fs , envs( SNORES ( : , 2 ) ) , 'cx' , 'MarkerSize' , 8 ,'linewidth' , 2 ) ;
+leg_str ( leg_ctr , : )= 'SNORES' ;
+
+end
+
+legend ( leg , leg_str , 'Location' , 'NorthEast' )
+title ( ' Normalized envelopes with peaks ' ) ;
+xlabel ( ' time in seconds ' ) ;
+ylabel ( ' Normalized Intensity ' ) ;
+figure();
+plot ( time1 , env ) ;
+ axis ( [ 0 , xlim , -2 , 2] ) ;
+
+title ( ' Envelope of abs values of Raw signal ' ) ;
+xlabel ( ' time in seconds ' ) ;
+ylabel ( ' Normalized Intensity ' ) ;
+totalSNORES = length( bs );
+ctr =0;
+Spm= [ ] ;
+
+for i =1: round ( ( length( time1 ) /Fs ) / 60 )
+j =1;
+while ( ( ( as( j ) /Fs ) / 60 )<i )
+ctr=ctr +1;
+j=j +1;
+if ( j>length( as ) )
+break ;
+end
+end
+Spm( i )=ctr ;
+ctr =0;
+end
+i=length(Spm) ;
+while i>1
+Spm( i )=Spm( i )-Spm( i -1) ;
+i=i -1;
+end
+if ( length(Spm) >0)
+figure( ) ;
+lab = num2str (Spm) ;
+bar (Spm) ;
+title ( 'Snores per minute' ) ;
+x =[1: length(Spm) ] ;
+
+for i1 =1: numel(Spm)
+    text( x(i1) , Spm(i1) , num2str(Spm(i1))) %, 'Horizontal Alignment' ,  'center' ,  'Vertical Alignment' , 'bottom' )
+end
+end
+figure ( ) ;
+x =[1 : 3] ;
+y=[ length(SNORES)] ; %, length(softbreath) , length(mildbreath) ] ;
+h= bar(y) ;
+title ( 'classified snores' ) ;
+axis ( 'auto' ) ;
+
+for i1=1:numel(y)
+    text( x(i1) , y(i1) , num2str(y(i1)))% , 'Horizontal Alignment' ,  'center' ,  'Vertical Alignment' , 'bottom' )
+end
+ lab={ 'snores'  } ;
+ set ( gca , 'XTickLabel' , lab ) ;
